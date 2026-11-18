@@ -3,7 +3,7 @@
 ## Decision
 Kept the existing server, API, and browser architecture. Repository: https://github.com/Fauzi41/guest-desk-review-starter
 
-Focused diff: https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cf..ff1c9a44ab433a63adffa9cbafe43c4a6e175ae2
+Focused diff: https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cf..af3335aef3d5711e0ecf6eb1600cecbe574199f0
 
 ### Stage 3 changes
 
