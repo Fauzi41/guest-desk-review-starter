@@ -82,6 +82,35 @@ test('next request is null for an empty queue', async t => {
   });
 });
 
+test('next request handles future, missing, invalid, and expired snoozedUntil values', async t => {
+  const cases = [
+    { name: 'future', snoozedUntil: '2099-01-01T00:00:00Z', expectedId: null },
+    { name: 'missing', expectedId: 'GD-SNOOZE' },
+    { name: 'invalid', snoozedUntil: 'not-a-date', expectedId: 'GD-SNOOZE' },
+    { name: 'non-ISO text', snoozedUntil: 'March 1 2099', expectedId: 'GD-SNOOZE' },
+    { name: 'impossible future date', snoozedUntil: '2099-02-30T00:00:00Z', expectedId: 'GD-SNOOZE' },
+    { name: 'ISO milliseconds', snoozedUntil: '2099-01-01T00:00:00.000Z', expectedId: null },
+    { name: 'ISO offset', snoozedUntil: '2099-01-01T02:00:00+02:00', expectedId: null },
+    { name: 'no timezone', snoozedUntil: '2099-01-01T00:00:00', expectedId: 'GD-SNOOZE' },
+    { name: 'at or before current time', snoozedUntil: new Date(Date.now() - 1000).toISOString(), expectedId: 'GD-SNOOZE' },
+    { name: 'expired', snoozedUntil: '2000-01-01T00:00:00Z', expectedId: 'GD-SNOOZE' }
+  ];
+
+  for (const { name, snoozedUntil, expectedId } of cases) {
+    const request = {
+      id: 'GD-SNOOZE',
+      urgency: 'urgent',
+      status: 'open',
+      createdAt: '2026-11-03T08:00:00Z'
+    };
+    if (name !== 'missing') request.snoozedUntil = snoozedUntil;
+
+    const call = await fixture(t, { requests: [request] });
+    const result = await (await call('/api/next-request')).json();
+    assert.equal(result.request?.id ?? null, expectedId, name);
+  }
+});
+
 test('next request uses oldest createdAt within the same urgency', async t => {
   const call = await fixture(t, {
     requests: [
@@ -92,4 +121,20 @@ test('next request uses oldest createdAt within the same urgency', async t => {
 
   const result = await (await call('/api/next-request')).json();
   assert.equal(result.request.id, 'GD-102');
+});
+
+test('next request distinguishes all-snoozed open records from an empty queue', async t => {
+  const snoozedCall = await fixture(t, {
+    requests: [{ id: 'GD-SNOOZED', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:00:00Z', snoozedUntil: '2099-01-01T00:00:00Z' }]
+  });
+  assert.deepEqual(await (await snoozedCall('/api/next-request')).json(), {
+    request: null,
+    reason: 'No open requests are eligible; they are currently snoozed.'
+  });
+
+  const emptyCall = await fixture(t, { requests: [] });
+  assert.deepEqual(await (await emptyCall('/api/next-request')).json(), {
+    request: null,
+    reason: 'No open requests remain.'
+  });
 });

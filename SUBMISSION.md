@@ -3,25 +3,47 @@
 ## Decision
 Kept the existing server, API, and browser architecture. Repository: https://github.com/Fauzi41/guest-desk-review-starter
 
-Updated [server.js](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-a4c65ede64197e1a112899a68bf994485b889c4b143198bac4af53425b38406f) so `/api/next-request` excludes resolved requests and orders open requests by urgency, oldest `createdAt`, then ascending request ID. It returns `Open <urgency> request; oldest createdAt, then ascending ID.` for a recommendation and `No open requests remain.` for an empty or all-resolved queue.
+### Stage 3 changes
 
-Updated [public/app.js](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-2e26cfed7509767f2d1cd3952d2fa7931097bf6ff9a0e4a704186edd03c52d45) so the status text is cleared when a handle/reopen update starts, preventing a stale success message. The “Handle next” panel in [public/index.html](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-c2cc24bc9001b11b6add48a4cd8f893d5d6c6e4d1bd254158bd14ab997f552cd) and [public/style.css](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-46467272678c3da621692b13b96d47ed25128fa8027d8dbedd84684c6336fb51) now shows guest, room, and urgency text. Urgency has red, blue, and gray text-and-badge styles for urgent, normal, and low.
+- `/api/next-request` reads `snoozedUntil` as an eligibility field.
+- Valid ISO timestamps later than the server's current time exclude that open request.
+- Missing values, invalid text, impossible calendar dates, and expired timestamps keep the request eligible.
+- Impossible dates are rejected explicitly by validating year, month, day, hour, minute, second, and timezone before using `Date.parse`.
+- Non-ISO text is rejected by an anchored ISO format check, so values such as `March 1 2099` do not snooze a request.
+- The empty reason now distinguishes the queue states:
+  - Empty queue: `No open requests remain.`
+  - Open-but-all-snoozed queue: `No open requests are eligible; they are currently snoozed.`
 
-Added API regression coverage in [test/server.test.js](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-af5f1314428ae23b9f98be976209c616281f2f1f7159ddcabb24b3aa23b9529e).
+### What stayed the same
+
+- The server remains in-memory; no database or scheduling service was added.
+- The resolved-request rule still excludes resolved requests.
+- Recommendation order remains urgent, normal, low; oldest `createdAt`; ascending request ID.
+- Browser handling still uses the backend decision, PATCHes the existing request API, and refreshes the recommendation afterward.
+
+Updated `public/app.js` so the status text is cleared when a handle/reopen update starts, preventing a stale success message. The “Handle next” panel in `public/index.html` and `public/style.css` now shows guest, room, and urgency text. Urgency has red, blue, and gray text-and-badge styles for urgent, normal, and low.
+
+Added API regression coverage in `test/server.test.js`.
 
 ## Why
 The original endpoint could recommend a resolved request and used descending IDs for exact timestamp ties. The server fix directly satisfies the open-only and ordering rules. The UI uses the backend recommendation, handles it through the existing PATCH API, then refreshes the list and next recommendation. The guest/room/urgency details are a small usability improvement that helps an operator act on the recommendation.
 
+Snoozing changes only eligibility. It preserves the existing urgency, `createdAt`, ascending-ID, resolved-request, API response, and browser handling rules. No scheduling service or new storage system was added.
+
+Strict validation prevents `Date.parse` normalization or non-ISO text from accidentally snoozing a request: the value must match an ISO date-time shape, have a real calendar date and valid clock/offset fields, and include `Z` or a numeric offset.
+
 ## How I checked
-Ran the baseline `npm test` before implementation: 4 tests passed. Ran `npm test` after implementation: 8 tests passed.
-✔ the starter serves its page, script, and fictional request inbox (66.177ms)
-✔ handling a request is reflected by the next read and is safe to repeat (28.0125ms)
-✔ invalid updates and unknown paths do not mutate the inbox or expose source (25.7425ms)
-✔ an empty inbox remains a successful response (8.1077ms)
-✔ next request selects an open request by urgency, age, then ascending ID (5.3558ms)
-✔ next request is null when all requests are resolved (8.76ms)
-✔ next request is null for an empty queue (4.849ms)
-✔ next request uses oldest createdAt within the same urgency (6.2012ms)
+Ran the baseline `npm test` before implementation: 4 tests passed. Ran `npm test` after the original recommendation/UX changes: 8 tests passed. Ran `npm test` after adding snooze support: 10 tests passed.
+✔ the starter serves its page, script, and fictional request inbox (66.4769ms)
+✔ handling a request is reflected by the next read and is safe to repeat (28.3913ms)
+✔ invalid updates and unknown paths do not mutate the inbox or expose source (21.9759ms)
+✔ an empty inbox remains a successful response (6.91ms)
+✔ next request selects an open request by urgency, age, then ascending ID (8.7301ms)
+✔ next request is null when all requests are resolved (6.75ms)
+✔ next request is null for an empty queue (5.557ms)
+✔ next request handles future, missing, invalid, and expired snoozedUntil values (19.1543ms)
+✔ next request uses oldest createdAt within the same urgency (7.0615ms)
+✔ next request distinguishes all-snoozed open records from an empty queue (11.6827ms)
 
 API coverage:
 
@@ -30,8 +52,22 @@ API coverage:
 - The same test verifies the reason is `Open urgent request; oldest createdAt, then ascending ID.`
 - `next request is null when all requests are resolved` verifies the all-resolved queue.
 - `next request is null for an empty queue` verifies the empty queue.
+- `next request handles future, missing, invalid, and expired snoozedUntil values` verifies future, missing, invalid text, non-ISO text, impossible future dates, and expired values independently.
 - `next request uses oldest createdAt within the same urgency` verifies `GD-102` is selected before `GD-106`.
 - Existing update and validation tests verify PATCH handling, repeat handling, and invalid payloads.
+
+Snooze results:
+
+- Future `2099-01-01T00:00:00Z`: excluded; the live API returned `request: null` when no other eligible request existed.
+- Missing `snoozedUntil`: eligible; the test recommendation was `GD-SNOOZE`.
+- Invalid `not-a-date`: treated as invalid and eligible; the test recommendation was `GD-SNOOZE`.
+- Non-ISO text `March 1 2099`: rejected by the anchored ISO format check and eligible; the test recommendation was `GD-SNOOZE`.
+- Impossible future date `2099-02-30T00:00:00Z`: rejected explicitly as invalid and eligible.
+- Expired `2000-01-01T00:00:00Z`: eligible; the test recommendation was `GD-SNOOZE`.
+- ISO milliseconds `2099-01-01T00:00:00.000Z`: accepted and excluded.
+- ISO offset `2099-01-01T02:00:00+02:00`: accepted and excluded.
+- No timezone `2099-01-01T00:00:00`: rejected as invalid and eligible.
+- Timestamp at or before the current time: eligible, verified with a timestamp one second in the past.
 
 Browser verification used clean local servers on ports 43212-43219:
 
@@ -42,6 +78,7 @@ Browser verification used clean local servers on ports 43212-43219:
 - The Open, All, and Handled filters were checked; each showed the appropriate records.
 - Urgent, normal, and low badge text/colors were observed.
 - Handling all five open requests verified the “All caught up” state, with `0 open`, `All caught up.`, and `No open requests remain.`
+- An all-snoozed browser fixture showed `1 open` in the inbox while Handle next showed `No open requests are eligible; they are currently snoozed.` This distinguishes an open-but-snoozed queue from a truly empty queue.
 
 For the failed-update check, first handled Jules and Casey successfully. Casey's successful handle loaded Alex and left `3 open`. Then blocked `PATCH /api/requests/GD-102` in browser network conditions and attempted to handle Alex. The status became empty, the open count stayed `3 open`, and the page showed `We could not reach the inbox. Check your connection, then refresh.`; no stale success text remained.
 

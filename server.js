@@ -27,6 +27,31 @@ async function readBody(req) {
   catch { throw Object.assign(new Error('Send a JSON object.'), { status: 400 }); }
 }
 
+function parseIsoTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:?\d{2})$/.exec(value);
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second, zone] = match;
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+  const hourNumber = Number(hour);
+  const minuteNumber = Number(minute);
+  const secondNumber = Number(second);
+  const yearNumber = Number(year);
+  const leapYear = yearNumber % 4 === 0 && (yearNumber % 100 !== 0 || yearNumber % 400 === 0);
+  const daysPerMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const lastDay = daysPerMonth[monthNumber - 1];
+  if (monthNumber < 1 || monthNumber > 12 || dayNumber < 1 || dayNumber > lastDay
+    || hourNumber > 23 || minuteNumber > 59 || secondNumber > 59) return null;
+  if (zone !== 'Z') {
+    const offset = /^([+-])(\d{2})(:?)(\d{2})$/.exec(zone);
+    if (!offset || Number(offset[2]) > 14 || Number(offset[4]) > 59
+      || (Number(offset[2]) === 14 && Number(offset[4]) !== 0)) return null;
+  }
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 // A new server starts with independent fictional records. A browser reload keeps changes;
 // restarting the process resets them. The exercise does not need a database or credentials.
 export function createStarterServer({ requests = seed } = {}) {
@@ -44,14 +69,24 @@ export function createStarterServer({ requests = seed } = {}) {
       }
       if (req.method === 'GET' && pathname === '/api/next-request') {
         const rank = { urgent: 0, normal: 1, low: 2 };
-        const request = records.filter(item => item.status === 'open')
+        const now = Date.now();
+        const openRecords = records.filter(item => item.status === 'open');
+        const eligibleRecords = openRecords.filter(item => {
+          if (item.status !== 'open') return false;
+          const snoozedUntil = parseIsoTimestamp(item.snoozedUntil);
+          if (snoozedUntil === null) return true;
+          return !Number.isFinite(snoozedUntil) || snoozedUntil <= now;
+        })
           .toSorted((a, b) => rank[a.urgency] - rank[b.urgency]
             || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0] || null;
+        const request = eligibleRecords;
         return json(res, 200, {
           request,
           reason: request
             ? `Open ${request.urgency} request; oldest createdAt, then ascending ID.`
-            : 'No open requests remain.'
+            : openRecords.length > 0
+              ? 'No open requests are eligible; they are currently snoozed.'
+              : 'No open requests remain.'
         });
       }
       if (req.method === 'GET' && pathname === '/api/requests') {
