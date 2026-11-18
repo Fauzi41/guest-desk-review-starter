@@ -138,3 +138,17 @@ test('next request distinguishes all-snoozed open records from an empty queue', 
     reason: 'No open requests remain.'
   });
 });
+
+test('next request treats a snoozedUntil exactly equal to current time as eligible', async t => {
+  const now = Date.UTC(2026, 10, 18, 10, 30, 0);
+  const originalDateNow = Date.now;
+  Date.now = () => now;
+  t.after(() => { Date.now = originalDateNow; });
+
+  const call = await fixture(t, {
+    requests: [{ id: 'GD-BOUNDARY', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:00:00Z', snoozedUntil: '2026-11-18T10:30:00.000Z' }]
+  });
+
+  const result = await (await call('/api/next-request')).json();
+  assert.equal(result.request.id, 'GD-BOUNDARY');
+});

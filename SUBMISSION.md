@@ -69,7 +69,7 @@ Snooze results:
 - ISO milliseconds `2099-01-01T00:00:00.000Z`: accepted and excluded.
 - ISO offset `2099-01-01T02:00:00+02:00`: accepted and excluded.
 - No timezone `2099-01-01T00:00:00`: rejected as invalid and eligible.
-- Timestamp at or before the current time: eligible, verified with a timestamp one second in the past.
+- Timestamp exactly equal to the current time: eligible. This was verified by pinning `Date.now()` in the test to `2026-11-18T10:30:00.000Z` and setting the same exact snooze timestamp. Timestamp one second before the current time was also eligible.
 
 Browser verification used clean local servers on ports 43212-43219:
 
