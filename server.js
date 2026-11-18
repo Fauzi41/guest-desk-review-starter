@@ -50,7 +50,7 @@ export function createStarterServer({ requests = seed } = {}) {
         return json(res, 200, {
           request,
           reason: request
-            ? `Open ${request.urgency} request; oldest at this urgency.`
+            ? `Open ${request.urgency} request; oldest createdAt, then ascending ID.`
             : 'No open requests remain.'
         });
       }

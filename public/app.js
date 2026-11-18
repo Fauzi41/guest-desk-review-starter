@@ -56,7 +56,7 @@ async function load() {
 
 async function update(item) {
   if (busy) return;
-  busy = true; $('error').hidden = true; render();
+  busy = true; $('status').textContent = ''; $('error').hidden = true; render();
   try {
     await api(`/api/requests/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: JSON.stringify({ status: item.status === 'open' ? 'resolved' : 'open' }) });
     records = (await api('/api/requests')).requests;
