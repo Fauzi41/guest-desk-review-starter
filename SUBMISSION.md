@@ -15,6 +15,7 @@ Focused diff: https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883
 - The empty reason now distinguishes the queue states:
   - Empty queue: `No open requests remain.`
   - Open-but-all-snoozed queue: `No open requests are eligible; they are currently snoozed.`
+  - Only resolved records, including resolved snoozed records: `No open requests remain.` because resolved records are not counted as open.
 
 ### What stayed the same
 
@@ -36,21 +37,22 @@ Strict validation prevents `Date.parse` normalization or non-ISO text from accid
 Assumption: because the application needs an absolute comparison time, timezone-less ISO text is treated as invalid rather than interpreted in a local timezone.
 
 ## How I checked
-Ran the baseline `npm test` before implementation: 4 tests passed. The original recommendation/UX changes raised it to 8 tests, snooze support raised it to 10, the exact-time boundary test raised it to 11, the mixed-ordering test raised it to 12, and the resolved-plus-snooze test brought the final suite to 13 tests.
+Ran the baseline `npm test` before implementation: 4 tests passed. The current final suite has 13 tests; resolved-only-snoozed coverage was added inside the existing queue-reason test, so it does not increase the test count.
 
 The pinned-clock case is the standalone test `next request treats a snoozedUntil exactly equal to current time as eligible` in `test/server.test.js`.
-✔ the starter serves its page, script, and fictional request inbox (61.6213ms)
-✔ handling a request is reflected by the next read and is safe to repeat (30.0849ms)
-✔ invalid updates and unknown paths do not mutate the inbox or expose source (22.5775ms)
-✔ an empty inbox remains a successful response (7.7063ms)
-✔ next request selects an open request by urgency, age, then ascending ID (6.5727ms)
-✔ next request is null when all requests are resolved (6.6226ms)
-✔ next request is null for an empty queue (4.99ms)
-✔ next request handles future, missing, invalid, and expired snoozedUntil values (44.5564ms)
-✔ next request uses oldest createdAt within the same urgency (7.3336ms)
-✔ next request distinguishes all-snoozed open records from an empty queue (8.1035ms)
-✔ next request treats a snoozedUntil exactly equal to current time as eligible (11.3472ms)
-✔ next request skips a future-snoozed urgent request and preserves urgency and tie ordering (5.8284ms)
+✔ the starter serves its page, script, and fictional request inbox (62.3311ms)
+✔ handling a request is reflected by the next read and is safe to repeat (30.4465ms)
+✔ invalid updates and unknown paths do not mutate the inbox or expose source (26.2431ms)
+✔ an empty inbox remains a successful response (8.0859ms)
+✔ next request selects an open request by urgency, age, then ascending ID (7.6935ms)
+✔ next request is null when all requests are resolved (5.9363ms)
+✔ next request is null for an empty queue (6.2805ms)
+✔ next request handles future, missing, invalid, and expired snoozedUntil values (44.0044ms)
+✔ next request uses oldest createdAt within the same urgency (7.3693ms)
+✔ next request distinguishes snoozed open, empty, and resolved-only queues (9.2425ms)
+✔ next request treats a snoozedUntil exactly equal to current time as eligible (12.4963ms)
+✔ next request skips a future-snoozed urgent request and preserves urgency and tie ordering (8.9644ms)
+✔ resolved requests stay excluded regardless of expired or invalid snoozedUntil (5.4982ms)
 
 API coverage:
 
@@ -61,7 +63,7 @@ API coverage:
 - `next request is null for an empty queue` verifies the empty queue.
 - `next request handles future, missing, invalid, and expired snoozedUntil values` verifies future, missing, invalid text, non-ISO text, impossible future dates, and expired values independently.
 - `next request uses oldest createdAt within the same urgency` verifies `GD-102` is selected before `GD-106`.
-- `next request distinguishes all-snoozed open records from an empty queue` verifies the distinct snoozed and empty reasons.
+- `next request distinguishes snoozed open, empty, and resolved-only queues` verifies the distinct snoozed, empty, and resolved-only-snoozed reasons.
 - `next request treats a snoozedUntil exactly equal to current time as eligible` verifies exact equality and one second after exclusion.
 - `next request skips a future-snoozed urgent request and preserves urgency and tie ordering` verifies `GD-400` is skipped and `GD-401` wins over `GD-402` and normal `GD-403`.
 - `resolved requests stay excluded regardless of expired or invalid snoozedUntil` verifies expired/invalid snooze values do not override the resolved-request rule.

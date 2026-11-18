@@ -123,7 +123,7 @@ test('next request uses oldest createdAt within the same urgency', async t => {
   assert.equal(result.request.id, 'GD-102');
 });
 
-test('next request distinguishes all-snoozed open records from an empty queue', async t => {
+test('next request distinguishes snoozed open, empty, and resolved-only queues', async t => {
   const snoozedCall = await fixture(t, {
     requests: [{ id: 'GD-SNOOZED', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:00:00Z', snoozedUntil: '2099-01-01T00:00:00Z' }]
   });
@@ -134,6 +134,14 @@ test('next request distinguishes all-snoozed open records from an empty queue', 
 
   const emptyCall = await fixture(t, { requests: [] });
   assert.deepEqual(await (await emptyCall('/api/next-request')).json(), {
+    request: null,
+    reason: 'No open requests remain.'
+  });
+
+  const resolvedSnoozedCall = await fixture(t, {
+    requests: [{ id: 'GD-RESOLVED-SNOOZED', urgency: 'urgent', status: 'resolved', createdAt: '2026-11-03T08:00:00Z', snoozedUntil: '2099-01-01T00:00:00Z' }]
+  });
+  assert.deepEqual(await (await resolvedSnoozedCall('/api/next-request')).json(), {
     request: null,
     reason: 'No open requests remain.'
   });
