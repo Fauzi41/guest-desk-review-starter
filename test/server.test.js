@@ -173,4 +173,29 @@ test('next request skips a future-snoozed urgent request and preserves urgency a
 
   const result = await (await call('/api/next-request')).json();
   assert.equal(result.request.id, 'GD-401');
+
+  const unsnoozedCall = await fixture(t, {
+    requests: [
+      { id: 'GD-400', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T07:00:00Z' },
+      { id: 'GD-402', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:30:00Z' },
+      { id: 'GD-401', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:30:00Z' },
+      { id: 'GD-403', urgency: 'normal', status: 'open', createdAt: '2026-11-03T07:00:00Z' }
+    ]
+  });
+
+  const unsnoozedResult = await (await unsnoozedCall('/api/next-request')).json();
+  assert.equal(unsnoozedResult.request.id, 'GD-400');
+});
+
+test('resolved requests stay excluded regardless of expired or invalid snoozedUntil', async t => {
+  const call = await fixture(t, {
+    requests: [
+      { id: 'GD-EXPIRED-RESOLVED', urgency: 'urgent', status: 'resolved', createdAt: '2026-11-03T07:00:00Z', snoozedUntil: '2000-01-01T00:00:00Z' },
+      { id: 'GD-INVALID-RESOLVED', urgency: 'urgent', status: 'resolved', createdAt: '2026-11-03T08:00:00Z', snoozedUntil: 'not-a-date' },
+      { id: 'GD-OPEN', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T09:00:00Z', snoozedUntil: '2000-01-01T00:00:00Z' }
+    ]
+  });
+
+  const result = await (await call('/api/next-request')).json();
+  assert.equal(result.request.id, 'GD-OPEN');
 });
