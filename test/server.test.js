@@ -44,3 +44,31 @@ test('an empty inbox remains a successful response', async t => {
   const call = await fixture(t, { requests: [] });
   assert.deepEqual(await (await call('/api/requests')).json(), { requests: [] });
 });
+
+test('next request selects an open request by urgency, age, then ascending ID', async t => {
+  const call = await fixture(t, {
+    requests: [
+      { id: 'GD-200', urgency: 'normal', status: 'open', createdAt: '2026-11-03T08:00:00Z' },
+      { id: 'GD-202', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:30:00Z' },
+      { id: 'GD-201', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:30:00Z' },
+      { id: 'GD-199', urgency: 'urgent', status: 'resolved', createdAt: '2026-11-03T07:00:00Z' }
+    ]
+  });
+
+  const response = await call('/api/next-request');
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.request.id, 'GD-201');
+  assert.equal(result.reason, 'Open urgent request; oldest at this urgency.');
+});
+
+test('next request is null when all requests are resolved', async t => {
+  const call = await fixture(t, {
+    requests: [{ id: 'GD-200', urgency: 'urgent', status: 'resolved', createdAt: '2026-11-03T08:00:00Z' }]
+  });
+
+  assert.deepEqual(await (await call('/api/next-request')).json(), {
+    request: null,
+    reason: 'No open requests remain.'
+  });
+});

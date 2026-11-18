@@ -44,9 +44,15 @@ export function createStarterServer({ requests = seed } = {}) {
       }
       if (req.method === 'GET' && pathname === '/api/next-request') {
         const rank = { urgent: 0, normal: 1, low: 2 };
-        const request = records.toSorted((a, b) => rank[a.urgency] - rank[b.urgency]
-          || a.createdAt.localeCompare(b.createdAt) || b.id.localeCompare(a.id))[0] || null;
-        return json(res, 200, { request, reason: request ? 'Highest urgency, then oldest request.' : 'No open requests remain.' });
+        const request = records.filter(item => item.status === 'open')
+          .toSorted((a, b) => rank[a.urgency] - rank[b.urgency]
+            || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0] || null;
+        return json(res, 200, {
+          request,
+          reason: request
+            ? `Open ${request.urgency} request; oldest at this urgency.`
+            : 'No open requests remain.'
+        });
       }
       if (req.method === 'GET' && pathname === '/api/requests') {
         return json(res, 200, { requests: records.toSorted((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)) });

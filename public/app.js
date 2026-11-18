@@ -72,6 +72,7 @@ void load();
 
 async function loadRecommendation() {
   $('next-status').textContent = 'Finding the next request…';
+  $('next-details').textContent = '';
   $('next-reason').textContent = '';
   $('next-error').hidden = true;
   $('handle-next').hidden = true;
@@ -80,6 +81,13 @@ async function loadRecommendation() {
     const result = await api('/api/next-request');
     recommendation = result.request;
     $('next-status').textContent = recommendation ? recommendation.title : 'All caught up.';
+    $('next-details').replaceChildren();
+    if (recommendation) {
+      $('next-details').append(
+        document.createTextNode(`${recommendation.guest} · Room ${recommendation.room} · `),
+        text('span', recommendation.urgency, `urgency-badge ${recommendation.urgency}`)
+      );
+    }
     $('next-reason').textContent = result.reason;
     $('handle-next').hidden = !recommendation;
   } catch (error) {
