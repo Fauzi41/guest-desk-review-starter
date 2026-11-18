@@ -3,11 +3,11 @@
 ## Decision
 Kept the existing server, API, and browser architecture. Repository: https://github.com/Fauzi41/guest-desk-review-starter
 
-Updated [server.js](https://github.com/Fauzi41/guest-desk-review-starter/commit/d9a9176d657cf05b05a65b70596673380d58561e#diff-a4c65ede64197e1a112899a68bf994485b889c4b143198bac4af53425b38406f) so `/api/next-request` excludes resolved requests and orders open requests by urgency, oldest `createdAt`, then ascending request ID. It returns `Open <urgency> request; oldest createdAt, then ascending ID.` for a recommendation and `No open requests remain.` for an empty or all-resolved queue.
+Updated [server.js](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-a4c65ede64197e1a112899a68bf994485b889c4b143198bac4af53425b38406f) so `/api/next-request` excludes resolved requests and orders open requests by urgency, oldest `createdAt`, then ascending request ID. It returns `Open <urgency> request; oldest createdAt, then ascending ID.` for a recommendation and `No open requests remain.` for an empty or all-resolved queue.
 
-Updated [public/app.js](https://github.com/Fauzi41/guest-desk-review-starter/commit/d9a9176d657cf05b05a65b70596673380d58561e#diff-2e26cfed7509767f2d1cd3952d2fa7931097bf6ff9a0e4a704186edd03c52d45) so the status text is cleared when a handle/reopen update starts, preventing a stale success message. The “Handle next” panel in [public/index.html](https://github.com/Fauzi41/guest-desk-review-starter/commit/d9a9176d657cf05b05a65b70596673380d58561e#diff-c2cc24bc9001b11b6add48a4cd8f893d5d6c6e4d1bd254158bd14ab997f552cd) and [public/style.css](https://github.com/Fauzi41/guest-desk-review-starter/commit/d9a9176d657cf05b05a65b70596673380d58561e#diff-46467272678c3da621692b13b96d47ed25128fa8027d8dbedd84684c6336fb51) now shows guest, room, and urgency text. Urgency has red, blue, and gray text-and-badge styles for urgent, normal, and low.
+Updated [public/app.js](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-2e26cfed7509767f2d1cd3952d2fa7931097bf6ff9a0e4a704186edd03c52d45) so the status text is cleared when a handle/reopen update starts, preventing a stale success message. The “Handle next” panel in [public/index.html](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-c2cc24bc9001b11b6add48a4cd8f893d5d6c6e4d1bd254158bd14ab997f552cd) and [public/style.css](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-46467272678c3da621692b13b96d47ed25128fa8027d8dbedd84684c6336fb51) now shows guest, room, and urgency text. Urgency has red, blue, and gray text-and-badge styles for urgent, normal, and low.
 
-Added API regression coverage in [test/server.test.js](https://github.com/Fauzi41/guest-desk-review-starter/commit/d9a9176d657cf05b05a65b70596673380d58561e#diff-af5f1314428ae23b9f98be976209c616281f2f1f7159ddcabb24b3aa23b9529e , https://github.com/Fauzi41/guest-desk-review-starter/commit/d3f106a1e861e7d12c95ce991470c90be7e05b3f#diff-af5f1314428ae23b9f98be976209c616281f2f1f7159ddcabb24b3aa23b9529e).
+Added API regression coverage in [test/server.test.js](https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cfe105f6ea2e3219044fcda173acf62aedb..f528c9f9d5ee4f9cb0cfa9b724fd05ed14b49a6c#diff-af5f1314428ae23b9f98be976209c616281f2f1f7159ddcabb24b3aa23b9529e).
 
 ## Why
 The original endpoint could recommend a resolved request and used descending IDs for exact timestamp ties. The server fix directly satisfies the open-only and ordering rules. The UI uses the backend recommendation, handles it through the existing PATCH API, then refreshes the list and next recommendation. The guest/room/urgency details are a small usability improvement that helps an operator act on the recommendation.
@@ -26,6 +26,7 @@ Ran the baseline `npm test` before implementation: 4 tests passed. Ran `npm test
 API coverage:
 
 - `next request selects an open request by urgency, age, then ascending ID` verifies that resolved `GD-104` is not recommended, urgent requests beat normal requests, and `GD-201` wins an exact urgency/timestamp/ID tie before `GD-202`.
+- `GD-201` and `GD-202` are test-only fixture records and do not appear in `requests.json`.
 - The same test verifies the reason is `Open urgent request; oldest createdAt, then ascending ID.`
 - `next request is null when all requests are resolved` verifies the all-resolved queue.
 - `next request is null for an empty queue` verifies the empty queue.
@@ -45,6 +46,7 @@ Browser verification used clean local servers on ports 43212-43219:
 For the failed-update check, first handled Jules and Casey successfully. Casey's successful handle loaded Alex and left `3 open`. Then blocked `PATCH /api/requests/GD-102` in browser network conditions and attempted to handle Alex. The status became empty, the open count stayed `3 open`, and the page showed `We could not reach the inbox. Check your connection, then refresh.`; no stale success text remained.
 
 For the recommendation-error check, blocked `GET /api/next-request` while Samira remained the sole open request. The panel displayed `Recommendation unavailable.`, showed `Failed to fetch`, and hid the handle button. The inbox still showed `1 open`.
+The inbox list and Open/All/Handled filters continued to work while this recommendation error was displayed.
 
 ## Working with AI
 Prompted: “You are a senior engineer handling this guest desk application. Read all sources, identify existing functionality, bugs and missing requirements, files to change, tests to add, and propose a prioritized plan without modifying anything.” I used its finding that `/api/next-request` lacked an open-status filter and reversed ID tie-break. I rejected a suggested ranking-helper extraction because the rule is small and the existing server is already the correct ownership boundary.
