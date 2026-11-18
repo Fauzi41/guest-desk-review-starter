@@ -3,6 +3,8 @@
 ## Decision
 Kept the existing server, API, and browser architecture. Repository: https://github.com/Fauzi41/guest-desk-review-starter
 
+Focused diff: https://github.com/Fauzi41/guest-desk-review-starter/compare/c1883cf..4d4dfbf611da564d8a7047df3d12076ffe6fb6bf
+
 ### Stage 3 changes
 
 - `/api/next-request` reads `snoozedUntil` as an eligibility field.
