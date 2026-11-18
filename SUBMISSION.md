@@ -33,19 +33,24 @@ The original endpoint could recommend a resolved request and used descending IDs
 Snoozing changes only eligibility. It preserves the existing urgency, `createdAt`, ascending-ID, resolved-request, API response, and browser handling rules. No scheduling service or new storage system was added.
 
 Strict validation prevents `Date.parse` normalization or non-ISO text from accidentally snoozing a request: the value must match an ISO date-time shape, have a real calendar date and valid clock/offset fields, and include `Z` or a numeric offset.
+Assumption: because the application needs an absolute comparison time, timezone-less ISO text is treated as invalid rather than interpreted in a local timezone.
 
 ## How I checked
-Ran the baseline `npm test` before implementation: 4 tests passed. Ran `npm test` after the original recommendation/UX changes: 8 tests passed. Ran `npm test` after adding snooze support: 10 tests passed.
-✔ the starter serves its page, script, and fictional request inbox (66.4769ms)
-✔ handling a request is reflected by the next read and is safe to repeat (28.3913ms)
-✔ invalid updates and unknown paths do not mutate the inbox or expose source (21.9759ms)
-✔ an empty inbox remains a successful response (6.91ms)
-✔ next request selects an open request by urgency, age, then ascending ID (8.7301ms)
-✔ next request is null when all requests are resolved (6.75ms)
-✔ next request is null for an empty queue (5.557ms)
-✔ next request handles future, missing, invalid, and expired snoozedUntil values (19.1543ms)
-✔ next request uses oldest createdAt within the same urgency (7.0615ms)
-✔ next request distinguishes all-snoozed open records from an empty queue (11.6827ms)
+Ran the baseline `npm test` before implementation: 4 tests passed. The original recommendation/UX changes raised it to 8 tests, snooze support raised it to 10, the exact-time boundary test raised it to 11, and the mixed-ordering test brought the final suite to 12 tests.
+
+The pinned-clock case is the standalone test `next request treats a snoozedUntil exactly equal to current time as eligible` in `test/server.test.js`.
+✔ the starter serves its page, script, and fictional request inbox (59.6316ms)
+✔ handling a request is reflected by the next read and is safe to repeat (26.8675ms)
+✔ invalid updates and unknown paths do not mutate the inbox or expose source (20.3439ms)
+✔ an empty inbox remains a successful response (6.4764ms)
+✔ next request selects an open request by urgency, age, then ascending ID (6.2459ms)
+✔ next request is null when all requests are resolved (7.1474ms)
+✔ next request is null for an empty queue (5.6227ms)
+✔ next request handles future, missing, invalid, and expired snoozedUntil values (42.2763ms)
+✔ next request uses oldest createdAt within the same urgency (17.5159ms)
+✔ next request distinguishes all-snoozed open records from an empty queue (13.3694ms)
+✔ next request treats a snoozedUntil exactly equal to current time as eligible (16.5924ms)
+✔ next request skips a future-snoozed urgent request and preserves urgency and tie ordering (5.9348ms)
 
 API coverage:
 
@@ -56,6 +61,9 @@ API coverage:
 - `next request is null for an empty queue` verifies the empty queue.
 - `next request handles future, missing, invalid, and expired snoozedUntil values` verifies future, missing, invalid text, non-ISO text, impossible future dates, and expired values independently.
 - `next request uses oldest createdAt within the same urgency` verifies `GD-102` is selected before `GD-106`.
+- `next request distinguishes all-snoozed open records from an empty queue` verifies the distinct snoozed and empty reasons.
+- `next request treats a snoozedUntil exactly equal to current time as eligible` verifies exact equality and one second after exclusion.
+- `next request skips a future-snoozed urgent request and preserves urgency and tie ordering` verifies `GD-400` is skipped and `GD-401` wins over `GD-402` and normal `GD-403`.
 - Existing update and validation tests verify PATCH handling, repeat handling, and invalid payloads.
 
 Snooze results:
@@ -64,12 +72,13 @@ Snooze results:
 - Missing `snoozedUntil`: eligible; the test recommendation was `GD-SNOOZE`.
 - Invalid `not-a-date`: treated as invalid and eligible; the test recommendation was `GD-SNOOZE`.
 - Non-ISO text `March 1 2099`: rejected by the anchored ISO format check and eligible; the test recommendation was `GD-SNOOZE`.
-- Impossible future date `2099-02-30T00:00:00Z`: rejected explicitly as invalid and eligible.
+- Impossible future date `2099-02-30T00:00:00Z`: rejected explicitly as invalid and eligible, recommending `GD-SNOOZE`.
 - Expired `2000-01-01T00:00:00Z`: eligible; the test recommendation was `GD-SNOOZE`.
-- ISO milliseconds `2099-01-01T00:00:00.000Z`: accepted and excluded.
-- ISO offset `2099-01-01T02:00:00+02:00`: accepted and excluded.
-- No timezone `2099-01-01T00:00:00`: rejected as invalid and eligible.
-- Timestamp exactly equal to the current time: eligible. This was verified by pinning `Date.now()` in the test to `2026-11-18T10:30:00.000Z` and setting the same exact snooze timestamp. Timestamp one second before the current time was also eligible.
+- ISO milliseconds `2099-01-01T00:00:00.000Z`: accepted and excluded, so `request: null` was returned with no other eligible record.
+- ISO offset `2099-01-01T02:00:00+02:00`: accepted and excluded, so `request: null` was returned with no other eligible record.
+- No timezone `2099-01-01T00:00:00`: rejected as invalid and eligible, recommending `GD-SNOOZE`.
+- Timestamp exactly equal to the current time: eligible, recommending `GD-BOUNDARY`. The test saved the original `Date.now`, replaced it with a fixed millisecond value, and restored it with `t.after(...)`; the timestamp one second before was eligible, and one second after returned `request: null` with `No open requests are eligible; they are currently snoozed.`.
+- Mixed snooze ordering: `GD-400` is future-snoozed; `GD-401` and `GD-402` tie at urgent/08:30; ascending ID selects `GD-401` before normal `GD-403`.
 
 Browser verification used clean local servers on ports 43212-43219:
 
@@ -89,6 +98,8 @@ The inbox list and Open/All/Handled filters continued to work while this recomme
 
 ## Working with AI
 Prompted: “You are a senior engineer handling this guest desk application. Read all sources, identify existing functionality, bugs and missing requirements, files to change, tests to add, and propose a prioritized plan without modifying anything.” I used its finding that `/api/next-request` lacked an open-status filter and reversed ID tie-break. I rejected a suggested ranking-helper extraction because the rule is small and the existing server is already the correct ownership boundary.
+
+Stage 3 AI interaction: prompted to validate future snooze handling against missing, invalid, impossible, expired, milliseconds, offset, timezone-less, and boundary values. I accepted the strict ISO and impossible-calendar-date checks, and rejected treating `2099-02-30T00:00:00Z` as valid based on `Date.parse()` normalization.
 
 ## Remaining work
 No `requests.json` content change is included; `git status` shows no modification to it. All browser flows are manual and have no automated browser-test coverage. The recommendation-error path currently exposes raw `error.message` text (`Failed to fetch`) rather than the friendlier `showError()` wording. The reason text is the same for every recommendation, including no-tie cases; it is accurate but could be more specific about the decisive tie-break. No persistent database, authentication, external AI service, or deployment work was added.

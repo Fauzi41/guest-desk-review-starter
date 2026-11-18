@@ -151,4 +151,26 @@ test('next request treats a snoozedUntil exactly equal to current time as eligib
 
   const result = await (await call('/api/next-request')).json();
   assert.equal(result.request.id, 'GD-BOUNDARY');
+
+  const afterCall = await fixture(t, {
+    requests: [{ id: 'GD-AFTER', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:00:00Z', snoozedUntil: '2026-11-18T10:30:01.000Z' }]
+  });
+
+  const afterResult = await (await afterCall('/api/next-request')).json();
+  assert.equal(afterResult.request, null);
+  assert.equal(afterResult.reason, 'No open requests are eligible; they are currently snoozed.');
+});
+
+test('next request skips a future-snoozed urgent request and preserves urgency and tie ordering', async t => {
+  const call = await fixture(t, {
+    requests: [
+      { id: 'GD-400', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T07:00:00Z', snoozedUntil: '2099-01-01T00:00:00Z' },
+      { id: 'GD-402', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:30:00Z' },
+      { id: 'GD-401', urgency: 'urgent', status: 'open', createdAt: '2026-11-03T08:30:00Z' },
+      { id: 'GD-403', urgency: 'normal', status: 'open', createdAt: '2026-11-03T07:00:00Z' }
+    ]
+  });
+
+  const result = await (await call('/api/next-request')).json();
+  assert.equal(result.request.id, 'GD-401');
 });
