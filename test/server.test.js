@@ -81,3 +81,15 @@ test('next request is null for an empty queue', async t => {
     reason: 'No open requests remain.'
   });
 });
+
+test('next request uses oldest createdAt within the same urgency', async t => {
+  const call = await fixture(t, {
+    requests: [
+      { id: 'GD-106', urgency: 'normal', status: 'open', createdAt: '2026-11-03T08:20:00Z' },
+      { id: 'GD-102', urgency: 'normal', status: 'open', createdAt: '2026-11-03T08:10:00Z' }
+    ]
+  });
+
+  const result = await (await call('/api/next-request')).json();
+  assert.equal(result.request.id, 'GD-102');
+});
